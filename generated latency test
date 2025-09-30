@@ -1,0 +1,98 @@
+import time
+import pyfirmata2
+import statistics
+
+SERIAL_PORT = 'COM4'  # Change to your Arduino's port
+
+def main():
+    try:
+        print(f"Attempting to connect to {SERIAL_PORT}...")
+        board = pyfirmata2.Arduino('COM4')
+        
+        # Configure analog input pin for event-driven reading
+        analog_pin = board.get_pin('a:0:i')
+        analog_pin.enable_reporting()
+        
+        print(f"Connected to {SERIAL_PORT} using pyfirmata2.")
+        print("Waiting for Arduino to stabilize...")
+        time.sleep(2)  # Give Arduino time to start reporting
+        
+        print("Starting latency measurement...")
+        print("Request Time | Response Time | Latency (ms) | Value")
+        print("-" * 60)
+        
+        latencies = []
+        measurement_count = 100  # Number of measurements to take
+        
+        for i in range(measurement_count):
+            # Store the previous value to detect when it changes
+            previous_value = analog_pin.value
+            
+            # Record request time (when we trigger a fresh read)
+            request_time = time.perf_counter()
+            
+            # Force a fresh reading by disabling and re-enabling reporting
+            # This simulates actively requesting a new measurement
+            analog_pin.disable_reporting()
+            time.sleep(0.001)  # Brief pause
+            analog_pin.enable_reporting()
+            
+            # Wait for a new value to arrive
+            timeout_start = time.perf_counter()
+            timeout_duration = 0.1  # 100ms timeout
+            new_value = None
+            
+            while True:
+                current_value = analog_pin.value
+                current_time = time.perf_counter()
+                
+                # Check for timeout
+                if current_time - timeout_start > timeout_duration:
+                    print(f"Timeout on measurement {i+1}")
+                    break
+                
+                # Check if we got a value (and it's different from before, indicating fresh data)
+                if current_value is not None:
+                    response_time = current_time
+                    latency_ms = (response_time - request_time) * 1000
+                    
+                    print(f"{request_time:.6f} | {response_time:.6f} | {latency_ms:.2f} ms | {current_value:.6f}")
+                    latencies.append(latency_ms)
+                    new_value = current_value
+                    break
+                
+                time.sleep(0.0001)  # Very short sleep to avoid busy waiting
+            
+            # Brief pause between measurements
+            time.sleep(0.01)
+        
+        # Calculate and display statistics
+        if latencies:
+            print("\n" + "="*60)
+            print("LATENCY STATISTICS:")
+            print(f"Total measurements: {len(latencies)}")
+            print(f"Average latency: {statistics.mean(latencies):.2f} ms")
+            print(f"Median latency: {statistics.median(latencies):.2f} ms")
+            print(f"Min latency: {min(latencies):.2f} ms")
+            print(f"Max latency: {max(latencies):.2f} ms")
+            if len(latencies) > 1:
+                print(f"Standard deviation: {statistics.stdev(latencies):.2f} ms")
+        else:
+            print("No successful measurements!")
+            
+    except KeyboardInterrupt:
+        print("\nStopped by user.")
+    except Exception as e:
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        if 'board' in locals():
+            try:
+                board.exit()
+                print("Arduino connection closed.")
+            except:
+                pass
+
+if __name__ == "__main__":
+    main()
