@@ -1,0 +1,82 @@
+import json
+import matplotlib.pyplot as plt
+import numpy as np
+
+def plot_ecg_from_json(ecg_json_file, velocity_json_file=None):
+    # Load ECG data
+    with open(ecg_json_file, 'r') as f:
+        ecg_data = json.load(f)
+
+    # Extract ECG data
+    sample_numbers = [item['sample_num'] for item in ecg_data]
+    values = [item['analog_value'] for item in ecg_data]
+    timestamps = [item['system_runtime'] for item in ecg_data]
+    
+    # Convert timestamps to relative time starting from 0
+    start_timestamp = timestamps[0]
+    time_relative = [(t - start_timestamp) for t in timestamps]
+    
+    # Load arterial velocity data if provided
+    velocity_data = None
+    if velocity_json_file:
+        try:
+            with open(velocity_json_file, 'r') as f:
+                velocity_json = json.load(f)
+            
+            # Extract ArterialVelocity_y data (adjust key if needed)
+            if 'ArterialVelocity_y' in velocity_json:
+                velocity_data = velocity_json['ArterialVelocity_y']
+                print(f"Loaded {len(velocity_data)} ArterialVelocity_y data points")
+            else:
+                print("ArterialVelocity_y not found in JSON file")
+                print("Available keys:", list(velocity_json.keys())[:10])
+                
+        except Exception as e:
+            print(f"Error loading velocity data: {e}")
+
+    # Create combined plot
+    if velocity_data:
+        plt.figure(figsize=(12, 6))
+        
+        # Create time axis for velocity data (assuming same duration)
+        velocity_time = np.linspace(0, max(time_relative), len(velocity_data))
+        
+        # Plot Arterial Velocity as primary data
+        plt.plot(velocity_time, velocity_data, 'r-', linewidth=2, label='ArterialVelocity_y')
+        
+        # Plot ECG as secondary visual overlay (normalized to velocity scale)
+        ecg_normalized = np.array(values)
+        # Scale ECG to fit nicely with velocity data
+        ecg_min, ecg_max = min(values), max(values)
+        vel_min, vel_max = min(velocity_data), max(velocity_data)
+        vel_range = vel_max - vel_min
+        
+        # Normalize ECG to velocity range (scaled down for visual overlay)
+        ecg_scaled = ((ecg_normalized - ecg_min) / (ecg_max - ecg_min)) * (vel_range * 0.9) + vel_min
+        
+        plt.plot(time_relative, ecg_scaled, 'b-', linewidth=1, alpha=0.7, label='ECG')
+        
+        plt.xlabel('Time (seconds)')
+        plt.ylabel('Arterial Velocity (units)')
+        plt.title('Arterial Velocity with ECG Overlay')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+    else:
+        # Plot only ECG data if no velocity data
+        plt.figure(figsize=(12, 6))
+        plt.plot(time_relative, values, 'b-', linewidth=1, label='ECG Signal')
+        plt.xlabel('Time (seconds)')
+        plt.ylabel('ECG Amplitude')
+        plt.title('ECG Signal vs Time')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+    
+    plt.show()
+
+
+
+
+plot_ecg_from_json(r"D:\EKG_Nicholas_test\trimmed_ECG_20250929_174717.json", r"D:\EKG_Nicholas_test\250929_Holo008_ekgtest_1000hz_R_HD_1\eyeflow\250929_Holo008_ekgtest_1000hz_R_HD_1_EF_0\json\250929_Holo008_ekgtest_1000hz_R_HD_1_EF_0_main_signals.json")
