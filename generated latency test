@@ -2,16 +2,16 @@ import time
 import pyfirmata2
 import statistics
 
-SERIAL_PORT = 'COM4'  # Change to your Arduino's port
+SERIAL_PORT = 'COM4'  
 
 def main():
     try:
         print(f"Attempting to connect to {SERIAL_PORT}...")
         board = pyfirmata2.Arduino('COM4')
         
-        # Configure analog input pin for event-driven reading
-        analog_pin = board.get_pin('a:0:i')
-        analog_pin.enable_reporting()
+        # Configure analog input pin for event-driven reading (same as arduinoEKG)
+        analogInput = board.get_pin('a:0:i')
+        analogInput.enable_reporting()
         
         print(f"Connected to {SERIAL_PORT} using pyfirmata2.")
         print("Waiting for Arduino to stabilize...")
@@ -22,46 +22,28 @@ def main():
         print("-" * 60)
         
         latencies = []
-        measurement_count = 100  # Number of measurements to take
+        measurement_count = 100
         
         for i in range(measurement_count):
-            # Store the previous value to detect when it changes
-            previous_value = analog_pin.value
+            # Record request time (when we request the current value)
+            request_time = time.perf_counter_ns()
             
-            # Record request time (when we trigger a fresh read)
-            request_time = time.perf_counter()
+            # Get the current analog value (same as arduinoEKG approach)
+            analog_value = analogInput.value
             
-            # Force a fresh reading by disabling and re-enabling reporting
-            # This simulates actively requesting a new measurement
-            analog_pin.disable_reporting()
-            time.sleep(0.001)  # Brief pause
-            analog_pin.enable_reporting()
+            # Record response time immediately after getting the value
+            response_time_ns = time.perf_counter_ns()
             
-            # Wait for a new value to arrive
-            timeout_start = time.perf_counter()
-            timeout_duration = 0.1  # 100ms timeout
-            new_value = None
+            # Calculate latency
+            latency_ns = response_time_ns - request_time
+            latency_ms = latency_ns / 1_000_000
             
-            while True:
-                current_value = analog_pin.value
-                current_time = time.perf_counter()
-                
-                # Check for timeout
-                if current_time - timeout_start > timeout_duration:
-                    print(f"Timeout on measurement {i+1}")
-                    break
-                
-                # Check if we got a value (and it's different from before, indicating fresh data)
-                if current_value is not None:
-                    response_time = current_time
-                    latency_ms = (response_time - request_time) * 1000
-                    
-                    print(f"{request_time:.6f} | {response_time:.6f} | {latency_ms:.2f} ms | {current_value:.6f}")
-                    latencies.append(latency_ms)
-                    new_value = current_value
-                    break
-                
-                time.sleep(0.0001)  # Very short sleep to avoid busy waiting
+            # Only record if we got a valid value
+            if analog_value is not None:
+                print(f"{request_time} | {response_time_ns} | {latency_ms:.2f} ms | {analog_value:.6f}")
+                latencies.append(latency_ms)
+            else:
+                print(f"{request_time} | {response_time_ns} | {latency_ms:.2f} ms | None (no reading)")
             
             # Brief pause between measurements
             time.sleep(0.01)
@@ -93,6 +75,8 @@ def main():
                 print("Arduino connection closed.")
             except:
                 pass
+        
+    
 
 if __name__ == "__main__":
     main()
