@@ -1,0 +1,17 @@
+import json
+json_filename = "C:\\Users\\HoloDopplerNYEE\\Desktop\\LLabs-Automation\\ECG-Sync\\nicholas\\Untrimmed_ECG_20251002_132604.json"
+
+with open(json_filename, 'r') as f:
+    data = json.load(f)
+
+analog_values = [sample['analog_value'] for sample in data]
+
+# Save analog values to a new JSON file
+
+output_filename = f"UNTrimmedanalog_values.json"
+
+with open(output_filename, 'w') as f:
+    json.dump(analog_values, f, indent=4)
+
+
+
