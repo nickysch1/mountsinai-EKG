@@ -12,170 +12,111 @@ import csv
 #simple test arduino EKG reader script with holo file parsing and timing sync
 #by nicholas schnorbus 2025
 
+# Ask user whether to collect new data or load existing file
+print("ECG Data Collection Options:")
+print("1. Collect new ECG data from Arduino")
+print("2. Load existing untrimmed ECG JSON file")
+choice = input("Enter your choice (1 or 2): ").strip()
 
-
-#not my code, holo file parser from get_holo_data.py
-#def parse_holo_file(file_path: str) -> Dict[str, Any]:
-#        """Parse the header and footer of a .holo file."""
-#        holo_data = {"header": {}, "footer": {}}
-#        
-#        try:
-#            with open(file_path, 'rb') as f:
-#                # Read header (64 bytes)
-#                header_bytes = f.read(64)
-#                if len(header_bytes) < 64:
-#                    holo_data['error'] = "File too small for valid header."
-#                    return holo_data#
-#
-#                # Unpack header according to format
-#                header_format = '<4sHHIIIQB35x'
-#                unpacked_header = struct.unpack(header_format, header_bytes)#
-
- #           magic_number = unpacked_header[0].decode('utf-8').strip('\x00')
- #           if magic_number != 'HOLO':
- #               holo_data['error'] = f"Invalid magic number '{magic_number}'."
- #               return holo_data
-
- #           header_values = {
- #               "Magic Number": magic_number,
- #               "Version": unpacked_header[1],
- #               "Bits per Pixel": unpacked_header[2],
- #               "Image Width": unpacked_header[3],
- #               "Image Height": unpacked_header[4],
- #               "Image Number": unpacked_header[5],
- #               "Total Data Size": unpacked_header[6],
- #               "Endianness": unpacked_header[7]
- #           }
- #           holo_data['header'] = header_values
-
- #           # Read footer
- #           total_data_size = header_values["Total Data Size"]
- #           file_size = os.path.getsize(file_path)
- #           footer_position = 64 + total_data_size
- #           
- #           if file_size > footer_position:
- #               f.seek(footer_position)
- #               footer_bytes = f.read()
-   #                try:
-   #                    footer_json = footer_bytes.decode('utf-8')
-   #                    holo_data['footer'] = json.loads(footer_json)
-   #                except (json.JSONDecodeError, UnicodeDecodeError) as e:
-   #                    holo_data['footer'] = {"error": f"Footer parsing error: {str(e)}"}
-   #            else:
-   #                holo_data['footer'] = {"error": "No footer data found"}
-
-   #    except Exception as e:
-   #        holo_data['error'] = f"File parsing error: {str(e)}"
-   #        
-   #    return holo_data
-
-#not my code, holo timing extractor from get_holo_data.py modified to provide unix times instead (:
-#def extract_timing_from_holo(holo_data: Dict[str, Any]) -> Dict[str, Any]:
-#        """Extract timing information from holo file footer."""
-#        timing_info = {}
-#        
-#        try:
-#            footer = holo_data.get('footer', {})
-#            if 'info' in footer and 'timestamps_us' in footer['info']:
-#                timestamps_us = footer['info']['timestamps_us']
-#                timing_info = {
-#                    'unix_first': timestamps_us['unix_first'],
-#                    'unix_last': timestamps_us['unix_last']
-#                }
-#                #if 'first' in timestamps_us and 'last' in timestamps_us:
-#                    #first_us = timestamps_us['first']
-#                    #last_us = timestamps_us['last']
-#                    
-#                    # Convert microseconds to seconds
-#                    #first_offset_seconds = first_us / 1_000_000
-#                    #last_offset_seconds = last_us / 1_000_000
-#                    #timing_info = {
-#                    #    'first_offset_us': first_us,
-#                    #    'last_offset_us': last_us,
-#                    #    'first_offset_seconds': first_offset_seconds,
-#                    #    'last_offset_seconds': last_offset_seconds,
-#                    #    'duration_seconds': last_offset_seconds - first_offset_seconds,
-#                    #    'raw_timestamps_us': timestamps_us  # Store complete raw timestamp data
-#                    #}
-#                        
-#        except Exception as e:
-#            timing_info['error'] = f"Timing extraction error: {str(e)}"
-#            
-#        return timing_info
-
-
-#get board info
-board = pyfirmata2.Arduino('COM4')
-
-it = pyfirmata2.util.Iterator(board)
-it.start()
-
-analogInput = board.get_pin('a:0:i')
-test = 0
-
-# Store ECG data for later analysis
 ECG_data = []
 
-#target sampling rate
-target_hz = 1000
-target_interval = 1.0 / target_hz 
-
-#start timing and setup for sample delay 
-start_time_ns = time.time_ns()  #absolute timestamp for synchronization
-start_time = start_time_ns / 1_000_000_000 
-perf_start_ns = time.perf_counter_ns()  #monotonic timer for intervals
-target_interval_ns = int(target_interval * 1_000_000_000) 
-next_sample_time_ns = perf_start_ns
-
-print("Sample#, Analog Value, Timestamp (ns)")
-while True:
-    current_perf_ns = time.perf_counter_ns()
-    elapsed_perf_ns = current_perf_ns - perf_start_ns
-    elapsed_time = elapsed_perf_ns / 1_000_000_000  
+if choice == "2":
+    # Load existing ECG data
+    ecg_file_path = input("Enter path to untrimmed ECG JSON file: ")
+    ecg_file_path = ecg_file_path.strip().strip('"').strip("'")
     
-    if elapsed_time >= 10:
-        break
+    try:
+        if os.path.exists(ecg_file_path):
+            with open(ecg_file_path, 'r') as f:
+                ECG_data = json.load(f)
+            print(f"Loaded {len(ECG_data)} ECG data points from {ecg_file_path}")
+            print(f"Data time range: {ECG_data[0]['timestamp_seconds']:.6f} to {ECG_data[-1]['timestamp_seconds']:.6f} seconds")
+        else:
+            print(f"File not found: {ecg_file_path}")
+            print("Falling back to Arduino data collection...")
+            choice = "1"
+    except Exception as e:
+        print(f"Error loading ECG file: {e}")
+        print("Falling back to Arduino data collection...")
+        choice = "1"
+
+if choice == "1":
+    print("\nStarting Arduino ECG data collection...")
     
-    #take sample when calculated time has passed (using high-precision timing)
-    if current_perf_ns >= next_sample_time_ns:
-        test += 1
-        analog_value = analogInput.value
-        #get absolute timestamp
-        timestamp_ns = time.time_ns()
-        current_time = timestamp_ns / 1_000_000_000
+    #get board info
+    board = pyfirmata2.Arduino('COM4')
+
+    it = pyfirmata2.util.Iterator(board)
+    it.start()
+
+    analogInput = board.get_pin('a:0:i')
+    test = 0
+
+    #target sampling rate
+    target_hz = 200
+    target_interval = 1.0 / target_hz 
+
+    #start timing and setup for sample delay 
+    start_time_ns = time.time_ns()  #absolute timestamp for synchronization
+    start_time = start_time_ns / 1_000_000_000 
+    perf_start_ns = time.perf_counter_ns()  #monotonic timer for intervals
+    target_interval_ns = int(target_interval * 1_000_000_000) 
+    next_sample_time_ns = perf_start_ns
+
+    print("Sample#, Analog Value, Timestamp (ns)")
+    while True:
+        current_perf_ns = time.perf_counter_ns()
+        elapsed_perf_ns = current_perf_ns - perf_start_ns
+        elapsed_time = elapsed_perf_ns / 1_000_000_000  
         
-        #store data
-        ECG_data.append({
-            'sample_num': test,
-            'analog_value': analog_value,
-            'timestamp_ns': timestamp_ns,
-            'timestamp_seconds': current_time
-        })
+        if elapsed_time >= 10:
+            break
         
-        print(f"{test}, {analog_value}, {timestamp_ns}")
-        #add delay for next sample
-        next_sample_time_ns += target_interval_ns
-    
-    
-#find actual sampling rate
-final_perf_ns = time.perf_counter_ns()
-actual_elapsed_ns = final_perf_ns - perf_start_ns
-actual_elapsed = actual_elapsed_ns / 1_000_000_000
-actual_hz = test / actual_elapsed
+        #take sample when calculated time has passed
+        if current_perf_ns >= next_sample_time_ns:
+            test += 1
+            analog_value = analogInput.value
+            #get absolute timestamp
+            timestamp_ns = time.time_ns()
+            current_time = timestamp_ns / 1_000_000_000
+            
+            #store data
+            ECG_data.append({
+                'sample_num': test,
+                'analog_value': analog_value,
+                'timestamp_ns': timestamp_ns,
+                'timestamp_seconds': current_time
+            })
+            
+            print(f"{test}, {analog_value}, {timestamp_ns}")
+            #add delay for next sample
+            next_sample_time_ns += target_interval_ns
+        
+        
+    #find actual sampling rate
+    final_perf_ns = time.perf_counter_ns()
+    actual_elapsed_ns = final_perf_ns - perf_start_ns
+    actual_elapsed = actual_elapsed_ns / 1_000_000_000
+    actual_hz = test / actual_elapsed
 
-#print results 
-print(f"Elapsed time: {actual_elapsed:.6f} seconds ({actual_elapsed_ns} nanoseconds)")
-print(f"Sampled {test} values")
-print(f"Target Hz: {target_hz}")
-print(f"Actual Hz: {actual_hz:.2f}")
-print(f"Average interval: {actual_elapsed_ns / test:.0f} ns per sample")
-print(f"Target interval: {target_interval_ns} ns per sample")
+    #print results 
+    print(f"Elapsed time: {actual_elapsed:.6f} seconds ({actual_elapsed_ns} nanoseconds)")
+    print(f"Sampled {test} values")
+    print(f"Target Hz: {target_hz}")
+    print(f"Actual Hz: {actual_hz:.2f}")
+    print(f"Average interval: {actual_elapsed_ns / test:.0f} ns per sample")
+    print(f"Target interval: {target_interval_ns} ns per sample")
 
-timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-json_filename = f"Untrimmed_ECG_{timestamp}.json"
-with open(json_filename, 'w') as f:
-    json.dump(ECG_data, f, indent=4)
-print(f"\n Untrimmed ECG data saved as JSON: {json_filename}")
+    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    json_filename = f"Untrimmed_ECG_{timestamp}.json"
+    with open(json_filename, 'w') as f:
+        json.dump(ECG_data, f, indent=4)
+    print(f"\n Untrimmed ECG data saved as JSON: {json_filename}")
+
+else:
+    print("Using loaded ECG data for analysis...")
+
+
 
 
 #parse example holo file and extract timing info
@@ -185,33 +126,48 @@ path = path.strip().strip('"').strip("'")
 print(f"Using path: {repr(path)}")
 print("Attempting to parse h5 file...")
 
-# Check if file exists before trying to parse
+#make sure it exists
 if os.path.exists(path):
     print("File found!")
-    #h5_data = parse_holo_file(path)
+    h5_data = h5py.File(path, 'r')
 else:
     print(f"File not found: {path}")
     print("Please check the path and try again.")
     h5_data = {"error": "File not found"}
 
-#extract time info
-list(h5_data.keys())
-#timing_info = extract_timing_from_holo(holo_data)
+#extract time info and arterial velocity data
+try:
+    arterialVelocitySignal = h5_data['/SignalsArterialVelocity_y']
+    #make scalar from h5 data
+    unix_first_array = h5_data['/UnixTimestampFirst'][:]
+    unix_last_array = h5_data['/UnixTimestampLast'][:]
+    timing_info = {
+        'unix_first': float(unix_first_array[0]) if len(unix_first_array) > 0 else float(unix_first_array),
+        'unix_last': float(unix_last_array[0]) if len(unix_last_array) > 0 else float(unix_last_array)
+    }
+    print(f"HDF5 data loaded successfully")
+    print(f"Arterial velocity signal shape: {arterialVelocitySignal.shape}")
+    print(f"Timing range: {timing_info['unix_first']} to {timing_info['unix_last']} µs")
+except Exception as e:
+    print(f"Error reading HDF5 data: {e}")
+    timing_info = {"error": "HDF5 data extraction failed"}
+    arterialVelocitySignal = None
 
 #pull out start and end times
 if 'error' not in timing_info:
-    holo_start_unix = timing_info['unix_first']  
-    holo_end_unix = timing_info['unix_last']   
-    duration = holo_end_unix - holo_start_unix  
+    holo_start_unix = float(timing_info['unix_first']) 
+    holo_end_unix = float(timing_info['unix_last'])     
+    duration_us = holo_end_unix - holo_start_unix       
+    duration = duration_us / 1_000_000             
     
-    print(f"Holo start Unix time: {holo_start_unix} seconds")
-    print(f"Holo end Unix time: {holo_end_unix} seconds")
-    print(f"Holo duration: {duration} seconds")
+    print(f"Holo start Unix time: {holo_start_unix} µs ({holo_start_unix / 1_000_000:.6f} seconds)")
+    print(f"Holo end Unix time: {holo_end_unix} µs ({holo_end_unix / 1_000_000:.6f} seconds)")
+    print(f"Holo duration: {duration_us} µs ({duration:.6f} seconds)")
     
     #find closest ECG datapoint to holo timestamps 
     if ECG_data:
-        holo_start_unix_ns = int(holo_start_unix * 1_000_000_000)
-        holo_end_unix_ns = int(holo_end_unix * 1_000_000_000)
+        holo_start_unix_ns = int(holo_start_unix * 1_000)  
+        holo_end_unix_ns = int(holo_end_unix * 1_000)      
         
         closest_start_ECG = min(ECG_data, key=lambda x: abs(x['timestamp_ns'] - holo_start_unix_ns))
         closest_end_ECG = min(ECG_data, key=lambda x: abs(x['timestamp_ns'] - holo_end_unix_ns))
@@ -221,13 +177,13 @@ if 'error' not in timing_info:
         start_time_diff = start_time_diff_ns / 1_000_000_000
         end_time_diff = end_time_diff_ns / 1_000_000_000
         
-        print(f"\nClosest ECG datapoint to holo start (Unix: {holo_start_unix}):")
+        print(f"\nClosest ECG datapoint to holo start (Unix: {holo_start_unix} µs):")
         print(f"ECG Sample #: {closest_start_ECG['sample_num']}")
         print(f"ECG Unix Timestamp: {closest_start_ECG['timestamp_seconds']:.6f} seconds")
         print(f"ECG Timestamp (ns): {closest_start_ECG['timestamp_ns']}")
         print(f"Time difference: {start_time_diff:.6f} seconds ({start_time_diff_ns} ns)")
         
-        print(f"\nClosest ECG datapoint to holo end (Unix: {holo_end_unix}):")
+        print(f"\nClosest ECG datapoint to holo end (Unix: {holo_end_unix} µs):")
         print(f"ECG Sample #: {closest_end_ECG['sample_num']}")
         print(f"ECG Unix Timestamp: {closest_end_ECG['timestamp_seconds']:.6f} seconds")
         print(f"ECG Timestamp (ns): {closest_end_ECG['timestamp_ns']}")
@@ -249,27 +205,19 @@ if 'error' not in timing_info:
             print(f"Trimmed duration: {trimmed_duration:.6f} seconds")
         print(f"Holo duration: {duration:.6f} seconds")
         
-        #create combined plot with ECG and arterial velocity data
+        #create combined plot with ECG and arterial velocity data from HDF5
+        #save ecg data
         if trimmed_ECG:
-            #ask for arterial file
-            velocity_path = input("Enter path to arterial velocity JSON file (or press Enter to skip): ")
-            velocity_path = velocity_path.strip().strip('"').strip("'")
-            velocity_data = None
-            if velocity_path and os.path.exists(velocity_path):
-                try:
-                    with open(velocity_path, 'r') as f:
-                        velocity_json = json.load(f)
-                    if 'ArterialVelocity_y' in velocity_json:
-                        velocity_data = velocity_json['ArterialVelocity_y']
-                        print(f"Loaded {len(velocity_data)} ArterialVelocity_y data points")
-                    else:
-                        print("ArterialVelocity_y not found in JSON file")
-                        print("Available keys:", list(velocity_json.keys())[:10])
-                        
-                except Exception as e:
-                    print(f"Error loading velocity data: {e}")
-            elif velocity_path:
-                print(f"Velocity file not found: {velocity_path}")
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            json_filename = f"trimmed_ECG_{timestamp}.json"
+            with open(json_filename, 'w') as f:
+                json.dump(trimmed_ECG, f, indent=4)
+            print(f"\n ECG data saved as JSON: {json_filename}")
+        
+        if trimmed_ECG and arterialVelocitySignal is not None:
+            #extract arterial velocity data 
+            velocity_data = arterialVelocitySignal[:] 
+            print(f"Loaded {len(velocity_data)} arterial velocity data points from HDF5")
             
             #extract ECG data for plotting 
             ecg_timestamps = [sample['timestamp_seconds'] for sample in trimmed_ECG]
@@ -279,81 +227,70 @@ if 'error' not in timing_info:
             start_timestamp = ecg_timestamps[0]
             ecg_time_relative = [(t - start_timestamp) for t in ecg_timestamps]
             
-            #create the combined plot
-            if velocity_data:
-                plt.figure(figsize=(14, 10))
-                velocity_time = np.linspace(0, duration, len(velocity_data))
-                
-                #arterial velocity plot
-                plt.subplot(3, 1, 1)
-                plt.plot(velocity_time, velocity_data, 'r-', linewidth=2, label='ArterialVelocity_y')
-                plt.axvline(x=0, color='green', linestyle='--', linewidth=2, label='Holo Start')
-                plt.axvline(x=duration, color='green', linestyle=':', linewidth=2, label='Holo End')
-                plt.xlabel('Time (seconds)')
-                plt.ylabel('Arterial Velocity')
-                plt.title('Arterial Velocity with Holo Timing')
-                plt.legend()
-                plt.grid(True, alpha=0.3)
-                
-                #ecg plot
-                plt.subplot(3, 1, 2)
-                plt.plot(ecg_time_relative, ecg_values, 'b-', linewidth=1, label='ECG Signal')
-                plt.axvline(x=0, color='green', linestyle='--', linewidth=2, label='Sync Start')
-                plt.axvline(x=max(ecg_time_relative), color='green', linestyle=':', linewidth=2, label='Sync End')
-                plt.xlabel('Time (seconds)')
-                plt.ylabel('ECG Amplitude')
-                plt.title('ECG Signal (Synchronized to Holo Timing)')
-                plt.legend()
-                plt.grid(True, alpha=0.3)
-                
-                #combined plot
-                plt.subplot(3, 1, 3)
-                
-                #arterial velocity plot
-                plt.plot(velocity_time, velocity_data, 'r-', linewidth=2, label='ArterialVelocity_y', alpha=0.8)
-                
-                #ECG data with natural timing - no scaling needed
-                plt.plot(ecg_time_relative, ecg_values, 'b-', linewidth=1, alpha=0.7, label='ECG Signal')
-                
-                plt.xlabel('Time (seconds)')
-                plt.ylabel('Signal Amplitude')
-                plt.title('Arterial Velocity with ECG')
-                plt.legend()
-                plt.grid(True, alpha=0.3)
-                
-                plt.tight_layout()
-                plt.show()
-                
-                print(f"\nCombined plot created showing:")
-                print(f"- Arterial velocity over holo duration")
-                print(f"- ECG signal synchronized to holo timing")
-                print(f"- Combined overlay for correlation analysis")
-                
-            else:
-                #only ecg if no eyeflow
-                plt.figure(figsize=(12, 6))
-                plt.plot(ecg_time_relative, ecg_values, 'b-', linewidth=1, label='ECG Signal')
-                plt.axvline(x=0, color='green', linestyle='--', linewidth=2, label='Sync Start')
-                plt.axvline(x=max(ecg_time_relative), color='green', linestyle=':', linewidth=2, label='Sync End')
-                plt.xlabel('Time (seconds)')
-                plt.ylabel('ECG Amplitude')
-                plt.title('ECG Signal (Synchronized to Holo Timing)')
-                plt.legend()
-                plt.grid(True, alpha=0.3)
-                plt.tight_layout()
-                plt.show()
-                
-                print(f"\nECG plot created showing:")
-                print(f"- ECG signal synchronized to holo timing")
-                print(f"- Timing markers for sync verification")
+            #create the combined plot with HDF5 velocity data
+            plt.figure(figsize=(14, 10))
             
-        #save ecg data
-        if trimmed_ECG:
-            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-            json_filename = f"trimmed_ECG_{timestamp}.json"
-            with open(json_filename, 'w') as f:
-                json.dump(trimmed_ECG, f, indent=4)
-            print(f"\n ECG data saved as JSON: {json_filename}")
+            #create time axis for velocity data matching holo duration
+            velocity_time = np.linspace(0, duration, len(velocity_data))
+            
+            #arterial velocity plot from HDF5
+            plt.subplot(3, 1, 1)
+            plt.plot(velocity_time, velocity_data, 'r-', linewidth=2, label='Arterial Velocity (HDF5)')
+            plt.axvline(x=0, color='green', linestyle='--', linewidth=2, label='Holo Start')
+            plt.axvline(x=duration, color='green', linestyle=':', linewidth=2, label='Holo End')
+            plt.xlabel('Time (seconds)')
+            plt.ylabel('Arterial Velocity')
+            plt.title('Arterial Velocity')
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            
+            #ecg plot
+            plt.subplot(3, 1, 2)
+            plt.plot(ecg_time_relative, ecg_values, 'b-', linewidth=1, label='ECG Signal')
+            plt.axvline(x=0, color='green', linestyle='--', linewidth=2, label='Sync Start')
+            plt.axvline(x=max(ecg_time_relative), color='green', linestyle=':', linewidth=2, label='Sync End')
+            plt.xlabel('Time (seconds)')
+            plt.ylabel('ECG Amplitude')
+            plt.title('ECG Signal')
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            
+            #combined plot 
+            plt.subplot(3, 1, 3)
+            
+            # Create dual y-axes for the combined plot
+            ax1 = plt.gca()  # Get current axes for arterial velocity
+            ax2 = ax1.twinx()  # Create second y-axis for ECG
+            
+            # Plot arterial velocity on left y-axis (red)
+            line1 = ax1.plot(velocity_time, velocity_data, 'r-', linewidth=2, label='Arterial Velocity (HDF5)', alpha=0.8)
+            ax1.set_ylabel('Arterial Velocity', color='red')
+            ax1.tick_params(axis='y', labelcolor='red')
+            
+            # Plot ECG on right y-axis (blue) 
+            line2 = ax2.plot(ecg_time_relative, ecg_values, 'b-', linewidth=1, label='ECG Signal', alpha=0.8)
+            ax2.set_ylabel('ECG Amplitude', color='blue')
+            ax2.tick_params(axis='y', labelcolor='blue')
+            
+            # Set x-axis properties
+            ax1.set_xlabel('Time (seconds)')
+            ax1.grid(True, alpha=0.3)
+            
+            # Combine legends from both axes
+            lines = line1 + line2
+            labels = [l.get_label() for l in lines]
+            ax1.legend(lines, labels, loc='upper left')
+            
+            plt.title('Arterial Velocity and ECG ')
+            
+            # Add vertical timing markers to both axes
+            ax1.axvline(x=0, color='green', linestyle='--', linewidth=1, alpha=0.7)
+            ax1.axvline(x=duration, color='green', linestyle=':', linewidth=1, alpha=0.7)
+            
+            plt.tight_layout()
+            plt.show()
+            
+        
         
     else:
         print("No ECG data!")
