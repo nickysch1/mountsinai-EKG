@@ -72,11 +72,11 @@ def plot_ecg_from_json(ecg_json_file, velocity_json_file=None):
         plt.title('ECG Signal vs Time')
         plt.legend()
         plt.grid(True, alpha=0.3)
-        plt.tight_layout()    
+        plt.tight_layout()
     
     plt.show()
 
 
 
 
-plot_ecg_from_json(r"D:\EKG_Nicholas_test\trimmed_ECG_20250929_174717.json", r"D:\EKG_Nicholas_test\250929_Holo008_ekgtest_1000hz_R_HD_1\eyeflow\250929_Holo008_ekgtest_1000hz_R_HD_1_EF_0\json\250929_Holo008_ekgtest_1000hz_R_HD_1_EF_0_main_signals.json")
+plot_ecg_from_json(r"C:\Users\HoloDopplerNYEE\Desktop\LLabs-Automation\ECG-Sync\nicholas\Untrimmed_ECG_20251002_125903.json")
