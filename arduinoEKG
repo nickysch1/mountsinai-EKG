@@ -12,7 +12,6 @@ import csv
 #simple test arduino EKG reader script with holo file parsing and timing sync
 #by nicholas schnorbus 2025
 
-# Ask user whether to collect new data or load existing file
 print("ECG Data Collection Options:")
 print("1. Collect new ECG data from Arduino")
 print("2. Load existing untrimmed ECG JSON file")
