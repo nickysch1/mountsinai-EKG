@@ -1,0 +1,40 @@
+Metadata-Version: 2.4
+Name: mountsinai-ekg
+Version: 0.1.0
+Summary: A Tkinter-based ECG capture and visualization app using Arduino (pyfirmata2).
+Author: Your Name
+License: MIT
+Project-URL: Homepage, https://github.com/nickysch1/mountsinai-EKG
+Keywords: EKG,ECG,Arduino,Tkinter,pyfirmata2
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Environment :: Win32 (MS Windows)
+Classifier: Environment :: MacOS X
+Classifier: Environment :: X11 Applications
+Classifier: Topic :: Scientific/Engineering
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: pyfirmata2>=2.5.0
+Requires-Dist: matplotlib>=3.5
+Requires-Dist: numpy>=1.22
+Requires-Dist: h5py>=3.6
+
+
+# Mount Sinai EKG
+
+A Tkinter desktop application to connect to an Arduino via `pyfirmata2`, stream ECG data, and plot/save readings.
+
+## Install (dev)
+```bash
+pip install -e .
+```
+
+## Run
+```bash
+# console entry
+mountsinai-ekg
+
+# or Windows GUI entry (no console window)
+MountSinai-EKG
+```

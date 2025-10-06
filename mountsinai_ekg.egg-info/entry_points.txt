@@ -1,0 +1,5 @@
+[console_scripts]
+mountsinai-ekg = mountsinai_ekg.gui:main
+
+[gui_scripts]
+MountSinai-EKG = mountsinai_ekg.gui:main

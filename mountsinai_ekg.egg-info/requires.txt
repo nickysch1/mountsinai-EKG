@@ -1,0 +1,4 @@
+pyfirmata2>=2.5.0
+matplotlib>=3.5
+numpy>=1.22
+h5py>=3.6

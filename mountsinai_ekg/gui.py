@@ -4,7 +4,7 @@ import threading
 import time
 import csv
 
-from scanner import connect_to_arduino, start_ecg_scan, stop_ecg_scan
+from .scanner import connect_to_arduino, start_ecg_scan, stop_ecg_scan
 
 
 class MountSinaiEKGApp(tk.Tk):
@@ -325,6 +325,9 @@ class MountSinaiEKGApp(tk.Tk):
                 self.runtime_var.set("Runtime: 0.0 s")
 
 
-if __name__ == "__main__":
+def main():
     app = MountSinaiEKGApp()
     app.mainloop()
+
+if __name__ == "__main__":
+    main()

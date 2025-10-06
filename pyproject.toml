@@ -1,0 +1,47 @@
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mountsinai-ekg"
+version = "0.1.0"
+description = "A Tkinter-based ECG capture and visualization app using Arduino (pyfirmata2)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{ name = "Your Name" }]
+keywords = ["EKG", "ECG", "Arduino", "Tkinter", "pyfirmata2"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Environment :: Win32 (MS Windows)",
+  "Environment :: MacOS X",
+  "Environment :: X11 Applications",
+  "Topic :: Scientific/Engineering",
+]
+
+# Runtime dependencies (tkinter is stdlib; matplotlib uses TkAgg)
+dependencies = [
+  "pyfirmata2>=2.5.0",
+  "matplotlib>=3.5",
+  "numpy>=1.22",
+  "h5py>=3.6"
+]
+
+[project.urls]
+Homepage = "https://github.com/nickysch1/mountsinai-EKG"
+
+# Entry points: console (shows a console) and GUI (no console on Windows)
+[project.scripts]
+mountsinai-ekg = "mountsinai_ekg.gui:main"
+
+[project.gui-scripts]
+MountSinai-EKG = "mountsinai_ekg.gui:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["mountsinai_ekg*"]
