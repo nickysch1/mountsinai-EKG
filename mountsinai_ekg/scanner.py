@@ -13,12 +13,6 @@ import csv
 _ecg_scan_stop_flag = threading.Event()
 
 def start_ecg_scan(board, analog_pin='a:0:i', target_hz=200, data_callback=None, analog_input=None):
-    """
-    Start collecting ECG data from the Arduino board until stop_ecg_scan() is called.
-    Calls data_callback(sample_dict) for each sample if provided.
-    Returns the collected ECG data list when stopped.
-    If analog_input is provided, it will be used instead of creating a new pin object.
-    """
     import time
     ECG_data = []
     _ecg_scan_stop_flag.clear()
@@ -60,17 +54,10 @@ def start_ecg_scan(board, analog_pin='a:0:i', target_hz=200, data_callback=None,
         return []
 
 def stop_ecg_scan():
-    """Signal the ECG scan to stop."""
     _ecg_scan_stop_flag.set()
 import pyfirmata2
 
 def connect_to_arduino(port: str | None = None):
-    """
-    Attempts to establish a connection to an Arduino using pyfirmata2.
-    If `port` is None or the string "AUTO" (case-insensitive), the function
-    will use pyfirmata2.Arduino.AUTODETECT to find the board automatically.
-    Returns the board object if successful, or None on failure.
-    """
     try:
         if port is None:
             port_to_use = pyfirmata2.Arduino.AUTODETECT
