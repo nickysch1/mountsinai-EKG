@@ -3,15 +3,16 @@ from tkinter import filedialog, messagebox
 import threading
 import time
 import csv
+import os
 
-from .scanner import connect_to_arduino, start_ecg_scan, stop_ecg_scan
+from scanner import connect_to_arduino, start_ecg_scan, stop_ecg_scan
 
 
 class MountSinaiEKGApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Mount Sinai EKG")
-        self.geometry("650x400")
+        self.geometry("1050x400")
         self.configure(bg="#2e2e2e")  
 
 
@@ -23,6 +24,8 @@ class MountSinaiEKGApp(tk.Tk):
         self._live_plot_updating = False
         self.scan_thread = None
         self._scan_session_id = 0  
+        # If True, automatically save CSV when a scan finishes
+        self.autosave_on_stop = True
 
         top_frame = tk.Frame(self, bg="#2e2e2e")
         top_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
@@ -42,6 +45,12 @@ class MountSinaiEKGApp(tk.Tk):
             connect_frame, text="Connect Arduino", command=self.connect_arduino, **btn_style
         )
         self.connect_btn.pack(side=tk.TOP, anchor="w")
+        # COM port entry
+        self.com_port_var = tk.StringVar(value="AUTO")
+        com_label = tk.Label(connect_frame, text="Port:", bg="#2e2e2e", fg="white")
+        com_label.pack(side=tk.TOP, anchor="w", pady=(6, 0))
+        com_entry = tk.Entry(connect_frame, textvariable=self.com_port_var, width=10)
+        com_entry.pack(side=tk.TOP, anchor="w")
         self.arduino_status = tk.Label(
             connect_frame,
             text="Arduino: Not connected",
@@ -77,6 +86,19 @@ class MountSinaiEKGApp(tk.Tk):
         self.filename_label.pack(side=tk.LEFT, padx=(20, 0))
         self.filename_entry = tk.Entry(top_frame, textvariable=self.filename_var, width=20)
         self.filename_entry.pack(side=tk.LEFT, padx=(0, 0))
+
+        # Autosave directory controls
+        self.autosave_dir_var = tk.StringVar(value=".")
+        autosave_label = tk.Label(top_frame, text="Autosave dir:", bg="#2e2e2e", fg="white")
+        autosave_label.pack(side=tk.LEFT, padx=(10, 0))
+        self.autosave_entry = tk.Entry(top_frame, textvariable=self.autosave_dir_var, width=24)
+        self.autosave_entry.pack(side=tk.LEFT, padx=(0, 4))
+        browse_btn = tk.Button(top_frame, text="Browse...", command=self._browse_autosave_dir, **btn_style)
+        browse_btn.pack(side=tk.LEFT, padx=(0, 10))
+        # Autosave enable checkbox
+        self.autosave_enabled_var = tk.BooleanVar(value=self.autosave_on_stop)
+        autosave_check = tk.Checkbutton(top_frame, text="Autosave", variable=self.autosave_enabled_var, bg="#2e2e2e", fg="white", selectcolor="#444444", activebackground="#444444")
+        autosave_check.pack(side=tk.LEFT, padx=(0, 10))
 
         import matplotlib
         matplotlib.use("TkAgg") 
@@ -150,7 +172,10 @@ class MountSinaiEKGApp(tk.Tk):
 
 
     def connect_arduino(self):
-        board = connect_to_arduino()
+        port = self.com_port_var.get().strip()
+        if port == "" or port.lower() == "auto":
+            port = None
+        board = connect_to_arduino(port=port)
         if board:
             self.arduino_board = board
             try:
@@ -254,6 +279,13 @@ class MountSinaiEKGApp(tk.Tk):
             self.save_btn.config(state=tk.NORMAL)
 
             self.update_live_plot(force=True)
+            #autoscve
+            try:
+                if self.autosave_enabled_var.get() and self.ecg_data:
+                    # schedule the autosave so it runs in the Tk mainloop
+                    self.after(0, lambda: self._autosave_csv())
+            except Exception as e:
+                print(f"Autosave scheduling error: {e}")
         except Exception as e:
             print(f"Error in _on_scan_finished: {e}")
 
@@ -323,6 +355,38 @@ class MountSinaiEKGApp(tk.Tk):
                 self.runtime_var.set(f"Runtime: {elapsed:.1f} s")
             else:
                 self.runtime_var.set("Runtime: 0.0 s")
+
+    def _autosave_csv(self):
+        try:
+            if not self.ecg_data:
+                return
+            ts = time.strftime('%Y%m%d_%H%M%S')
+            filename = f"ecg_autosave_{ts}.csv"
+            autosave_dir = self.autosave_dir_var.get() or "."
+            # expanduser and make absolute
+            autosave_dir = os.path.abspath(os.path.expanduser(autosave_dir))
+            try:
+                os.makedirs(autosave_dir, exist_ok=True)
+            except Exception:
+                autosave_dir = os.getcwd()
+            filepath = os.path.join(autosave_dir, filename)
+            fieldnames = sorted(set().union(*(d.keys() for d in self.ecg_data)))
+            with open(filepath, 'w', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                for row in self.ecg_data:
+                    writer.writerow(row)
+            print(f"Autosaved ECG data to {filepath}")
+        except Exception as e:
+            print(f"Failed to autosave CSV: {e}")
+
+    def _browse_autosave_dir(self):
+        try:
+            d = filedialog.askdirectory(title="Select autosave directory")
+            if d:
+                self.autosave_dir_var.set(d)
+        except Exception as e:
+            print(f"Error selecting autosave directory: {e}")
 
 
 def main():

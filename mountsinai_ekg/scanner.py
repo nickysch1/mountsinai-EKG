@@ -64,16 +64,25 @@ def stop_ecg_scan():
     _ecg_scan_stop_flag.set()
 import pyfirmata2
 
-def connect_to_arduino():
+def connect_to_arduino(port: str | None = None):
     """
-    Attempts to establish a connection with the first available Arduino using pyfirmata2.
-    Returns the board object if successful, or None if not found.
+    Attempts to establish a connection to an Arduino using pyfirmata2.
+    If `port` is None or the string "AUTO" (case-insensitive), the function
+    will use pyfirmata2.Arduino.AUTODETECT to find the board automatically.
+    Returns the board object if successful, or None on failure.
     """
     try:
-        port = pyfirmata2.Arduino.AUTODETECT
-        board = pyfirmata2.Arduino(port)
-        print("Connected to Arduino!")
+        if port is None:
+            port_to_use = pyfirmata2.Arduino.AUTODETECT
+        else:
+            p = str(port).strip()
+            if not p or p.lower() == "auto":
+                port_to_use = pyfirmata2.Arduino.AUTODETECT
+            else:
+                port_to_use = p
+        board = pyfirmata2.Arduino(port_to_use)
+        print(f"Connected to Arduino on {port_to_use}!")
         return board
     except Exception as e:
-        print(f"Failed to connect to Arduino: {e}")
+        print(f"Failed to connect to Arduino on {port!r}: {e}")
         return None
