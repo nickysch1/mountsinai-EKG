@@ -15,34 +15,36 @@ class SyncGUI(tk.Tk):
         self.title('EKG <-> Holo Sync')
         self.geometry('520x200')
         self.sync = EKGSync()
-
+        self.configure(bg="#2e2e2e")
         self.ecg_path_var = tk.StringVar(value='')
         self.h5_path_var = tk.StringVar(value='')
         self.out_path_var = tk.StringVar(value='')
 
-        # ECG row
-        tk.Label(self, text='ECG CSV:').grid(row=0, column=0, sticky='w', padx=8, pady=8)
+        btn_style = {
+            "bg": "#444444",
+            "fg": "white",
+            "activebackground": "#666666",
+            "activeforeground": "white",
+            "relief": tk.RAISED,
+            "bd": 2,
+        }
+        tk.Label(self, text='ECG CSV:', bg="#2e2e2e").grid(row=0, column=0, sticky='w', padx=8, pady=8)
         tk.Entry(self, textvariable=self.ecg_path_var, width=56).grid(row=0, column=1, padx=4)
-        tk.Button(self, text='Browse...', command=self.browse_ecg).grid(row=0, column=2, padx=4)
+        tk.Button(self, text='Browse...', command=self.browse_ecg, bg="#2e2e2e").grid(row=0, column=2, padx=4)
 
-        # H5 row
-        tk.Label(self, text='Holo HDF5:').grid(row=1, column=0, sticky='w', padx=8, pady=8)
+        tk.Label(self, text='Holo HDF5:', bg="#2e2e2e").grid(row=1, column=0, sticky='w', padx=8, pady=8)
         tk.Entry(self, textvariable=self.h5_path_var, width=56).grid(row=1, column=1, padx=4)
-        tk.Button(self, text='Browse...', command=self.browse_h5).grid(row=1, column=2, padx=4)
+        tk.Button(self, text='Browse...', command=self.browse_h5, bg="#2e2e2e").grid(row=1, column=2, padx=4)
 
-        # Output row
-        tk.Label(self, text='Trimmed CSV Out:').grid(row=2, column=0, sticky='w', padx=8, pady=8)
+        tk.Label(self, text='Trimmed CSV Out:', bg="#2e2e2e").grid(row=2, column=0, sticky='w', padx=8, pady=8)
         tk.Entry(self, textvariable=self.out_path_var, width=56).grid(row=2, column=1, padx=4)
-        tk.Button(self, text='Browse...', command=self.browse_out).grid(row=2, column=2, padx=4)
+        tk.Button(self, text='Browse...', command=self.browse_out, bg="#2e2e2e").grid(row=2, column=2, padx=4)
 
-        # Action buttons
-        tk.Button(self, text='Process Trim & Plot', command=self.process).grid(row=3, column=1, pady=12)
+        tk.Button(self, text='Process, Trim, and Plot', command=self.process, bg="#2e2e2e").grid(row=3, column=1, pady=12)
 
-        # Status label
         self.status_var = tk.StringVar(value='Ready')
-        tk.Label(self, textvariable=self.status_var).grid(row=4, column=0, columnspan=3, sticky='w', padx=8)
+        tk.Label(self, textvariable=self.status_var, bg="#2e2e2e").grid(row=4, column=0, columnspan=3, sticky='w', padx=8)
 
-        # Make grid expand nicely
         self.grid_columnconfigure(1, weight=1)
 
     def browse_ecg(self) -> None:
