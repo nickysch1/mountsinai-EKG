@@ -1,33 +1,25 @@
-
-
 from __future__ import annotations
 
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-from .sync import EKGSync
+from sync import EKGSync
 
 
 class SyncGUI(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title('EKG <-> Holo Sync')
-        self.geometry('520x200')
+        self.geometry('520x180')
         self.sync = EKGSync()
         self.configure(bg="#2e2e2e")
+
         self.ecg_path_var = tk.StringVar(value='')
         self.h5_path_var = tk.StringVar(value='')
-        self.out_path_var = tk.StringVar(value='')
+        self.out_dir_var = tk.StringVar(value='')
 
-        btn_style = {
-            "bg": "#444444",
-            "fg": "white",
-            "activebackground": "#666666",
-            "activeforeground": "white",
-            "relief": tk.RAISED,
-            "bd": 2,
-        }
+
         tk.Label(self, text='ECG CSV:', bg="#2e2e2e").grid(row=0, column=0, sticky='w', padx=8, pady=8)
         tk.Entry(self, textvariable=self.ecg_path_var, width=56).grid(row=0, column=1, padx=4)
         tk.Button(self, text='Browse...', command=self.browse_ecg, bg="#2e2e2e").grid(row=0, column=2, padx=4)
@@ -36,9 +28,9 @@ class SyncGUI(tk.Tk):
         tk.Entry(self, textvariable=self.h5_path_var, width=56).grid(row=1, column=1, padx=4)
         tk.Button(self, text='Browse...', command=self.browse_h5, bg="#2e2e2e").grid(row=1, column=2, padx=4)
 
-        tk.Label(self, text='Trimmed CSV Out:', bg="#2e2e2e").grid(row=2, column=0, sticky='w', padx=8, pady=8)
-        tk.Entry(self, textvariable=self.out_path_var, width=56).grid(row=2, column=1, padx=4)
-        tk.Button(self, text='Browse...', command=self.browse_out, bg="#2e2e2e").grid(row=2, column=2, padx=4)
+        tk.Label(self, text='Output Folder:', bg="#2e2e2e").grid(row=2, column=0, sticky='w', padx=8, pady=8)
+        tk.Entry(self, textvariable=self.out_dir_var, width=56).grid(row=2, column=1, padx=4)
+        tk.Button(self, text='Browse...', command=self.browse_outdir, bg="#2e2e2e").grid(row=2, column=2, padx=4)
 
         tk.Button(self, text='Process, Trim, and Plot', command=self.process, bg="#2e2e2e").grid(row=3, column=1, pady=12)
 
@@ -59,15 +51,16 @@ class SyncGUI(tk.Tk):
             self.h5_path_var.set(path)
             self.status_var.set(f'Loaded H5 path: {os.path.basename(path)}')
 
-    def browse_out(self) -> None:
-        path = filedialog.asksaveasfilename(title='Save trimmed CSV as', defaultextension='.csv', filetypes=[('CSV files', '*.csv'), ('All files', '*.*')])
+    def browse_outdir(self) -> None:
+        path = filedialog.askdirectory(title='Select output folder')
         if path:
-            self.out_path_var.set(path)
+            self.out_dir_var.set(path)
+            self.status_var.set(f'Output folder: {path}')
 
     def process(self) -> None:
         ecg_path = self.ecg_path_var.get().strip()
         h5_path = self.h5_path_var.get().strip()
-        out_path = self.out_path_var.get().strip()
+        out_dir = self.out_dir_var.get().strip()
 
         if not ecg_path or not os.path.exists(ecg_path):
             messagebox.showerror('Missing ECG', 'Please choose a valid ECG CSV file.')
@@ -75,10 +68,9 @@ class SyncGUI(tk.Tk):
         if not h5_path or not os.path.exists(h5_path):
             messagebox.showerror('Missing H5', 'Please choose a valid HDF5 holo file.')
             return
-
-        if not out_path:
-            out_path = os.path.join(os.path.dirname(ecg_path), f'trimmed_{os.path.basename(ecg_path)}')
-            self.out_path_var.set(out_path)
+        if not out_dir:
+            messagebox.showerror('Missing Output Folder', 'Please choose an output folder.')
+            return
 
         try:
             self.status_var.set('Loading H5...')
@@ -93,16 +85,36 @@ class SyncGUI(tk.Tk):
             self.update_idletasks()
             trimmed, info = self.sync.trim_ecg_to_holo()
 
+            ecg_stem = os.path.splitext(os.path.basename(ecg_path))[0]
+            os.makedirs(out_dir, exist_ok=True)
+            csv_path = os.path.join(out_dir, f'trimmedEKG_{ecg_stem}.csv')
+            info_json_path = os.path.join(out_dir, f'trimmed_{ecg_stem}_info.json')
+            plots_dir = os.path.join(out_dir, f'trimmed_{ecg_stem}_plots')
+
             self.status_var.set('Saving trimmed CSV...')
             self.update_idletasks()
-            self.sync.save_trimmed_csv(trimmed, out_path)
+            self.sync.save_trimmed_csv(trimmed, csv_path)
 
-            self.status_var.set('Plotting...')
+            self.status_var.set('Saving trim info JSON...')
             self.update_idletasks()
-            self.sync.plot_combined(trimmed)
+            self.sync.save_trim_info_json(info, info_json_path)
 
-            self.status_var.set(f'Done — wrote {out_path}')
-            messagebox.showinfo('Success', f'Trimmed CSV written to:\n{out_path}')
+            arterial_json_path = os.path.join(out_dir, f'arterial_{ecg_stem}.json')
+            self.status_var.set('Saving arterial flow JSON...')
+            self.update_idletasks()
+            self.sync.save_arterial_json(arterial_json_path)
+
+
+            self.status_var.set('Rendering and saving plots...')
+            self.update_idletasks()
+            png_path = self.sync.plot_combined(trimmed, show=True, save_dir=plots_dir)
+
+            self.status_var.set('Done')
+            msg = f"Saved:\n- CSV: {csv_path}\n- Info: {info_json_path}"
+            if png_path:
+                msg += f"\n- Plots: {png_path}"
+            messagebox.showinfo('Success', msg)
+
         except Exception as e:
             messagebox.showerror('Error', f'Processing failed: {e}')
             self.status_var.set(f'Error: {e}')
