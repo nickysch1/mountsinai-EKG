@@ -41,18 +41,16 @@ class EKGSync:
                 unix_last_arr = h5f['/UnixTimestampLast'][:]
                 self.holo_unix_first = float(unix_first_arr[0]) if len(unix_first_arr) > 0 else float(unix_first_arr)
                 self.holo_unix_last = float(unix_last_arr[0]) if len(unix_last_arr) > 0 else float(unix_last_arr)
-            except Exception as e:  # pragma: no cover - defensive
+            except Exception as e:
                 raise RuntimeError(f"Failed to read UnixTimestampFirst/Last: {e}")
 
             try:
                 self.arterial_velocity = np.array(h5f['/SignalsArterialVelocity_y'][:])
             except Exception:
-                # store None if not present
                 self.arterial_velocity = None
 
         self.h5_path = path
 
-    # ------------------------- ECG Loading -------------------------
     def load_ecg_csv(self, path: str, timestamp_ns_field: str = 'timestamp_ns') -> None:
         if not os.path.exists(path):
             raise FileNotFoundError(path)
@@ -96,7 +94,6 @@ class EKGSync:
             return len(timestamps) - 1
 
         before = idx - 1
-        # choose closer of before and idx
         if abs(timestamps[before] - target_ns) <= abs(timestamps[idx] - target_ns):
             return before
         return idx
@@ -147,32 +144,148 @@ class EKGSync:
         with open(path, 'w') as f:
             json.dump(out, f, indent=2)
 
-    def plot_combined(self, trimmed_samples: List[ECGSample], show: bool = True) -> None:
-        """Quick plot: arterial velocity (if available) and ECG trimmed segment."""
-        plt.figure(figsize=(12, 6))
+    def save_trim_info_json(self, info, path: str) -> None:
+        def make_json_safe(obj):
+            if hasattr(obj, "__dict__"):
+                return {k: make_json_safe(v) for k, v in obj.__dict__.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [make_json_safe(x) for x in obj]
+            elif isinstance(obj, dict):
+                return {k: make_json_safe(v) for k, v in obj.items()}
+            else:
+                return obj 
 
-        if self.arterial_velocity is not None:
-            ax1 = plt.subplot(2, 1, 1)
-            duration_sec = (self.holo_unix_last - self.holo_unix_first) / 1_000_000 if (self.holo_unix_last and self.holo_unix_first) else None
-            vel_t = np.linspace(0, float(duration_sec), len(self.arterial_velocity)) if duration_sec else np.arange(len(self.arterial_velocity))
-            ax1.plot(vel_t, self.arterial_velocity, 'r-')
+        safe_info = make_json_safe(info)
+
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(safe_info, f, indent=2)
+
+    def save_arterial_json(self, path: str) -> None:
+        import json, os
+        import numpy as np
+
+        if self.arterial_velocity is None or len(self.arterial_velocity) == 0:
+            raise ValueError("No arterial velocity data loaded.")
+
+        n = int(len(self.arterial_velocity))
+        vel = [float(v) for v in self.arterial_velocity]
+
+        unix_time_s = None
+        t_rel_s = None
+
+        if (
+            getattr(self, "holo_unix_first", None) is not None
+            and getattr(self, "holo_unix_last", None) is not None
+            and self.holo_unix_last > self.holo_unix_first
+        ):
+            duration_s = float(self.holo_unix_last - self.holo_unix_first) / 1_000_000.0
+            t_rel = np.linspace(0.0, duration_s, n, dtype=float)
+            t_rel_s = t_rel.tolist()
+            unix_start_s = float(self.holo_unix_first) / 1_000_000.0
+            unix_time_s = (unix_start_s + t_rel).tolist()
+        else:
+            # No reliable timestamps; provide sample index as a fallback
+            t_rel_s = list(range(n))
+            unix_time_s = None
+
+        payload = {
+            "meta": {
+                "count": n,
+                "units": {"velocity": "a.u.", "time": "s"},
+                "has_absolute_unix_time": unix_time_s is not None,
+            },
+            "t_rel_s": t_rel_s,
+            "unix_time_s": unix_time_s,    # may be None if unavailable
+            "velocity": vel,
+        }
+
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(payload, f, indent=2)
+
+    def plot_combined(
+        self,
+        trimmed_samples: List[ECGSample],
+        show: bool = True,
+        save_dir: Optional[str] = None,
+    ) -> Optional[str]:
+        import os
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(13, 8))
+
+        duration_sec = None
+        if self.holo_unix_first is not None and self.holo_unix_last is not None:
+            duration_sec = float(self.holo_unix_last - self.holo_unix_first) / 1_000_000
+
+        ax1 = plt.subplot(3, 1, 1)
+        if self.arterial_velocity is not None and len(self.arterial_velocity) > 0:
+            vel_t = (
+                np.linspace(0, duration_sec, len(self.arterial_velocity))
+                if duration_sec and duration_sec > 0
+                else np.arange(len(self.arterial_velocity), dtype=float)
+            )
+            ax1.plot(vel_t, self.arterial_velocity, '-')
+            ax1.set_ylabel('Arterial velocity')
             ax1.set_title('Arterial Velocity (HDF5)')
-            ax1.set_xlabel('Time (s)')
-            ax1.grid(True, alpha=0.3)
+        ax1.set_xlabel('Time (s)')
+        ax1.grid(True, alpha=0.3)
 
-        ax2 = plt.subplot(2, 1, 2) if self.arterial_velocity is not None else plt.subplot(1, 1, 1)
+
+        ecg_t = []
+        ecg_v = []
         if trimmed_samples:
             ecg_t0 = trimmed_samples[0].timestamp_seconds
-            t = [s.timestamp_seconds - ecg_t0 for s in trimmed_samples]
-            v = [s.analog_value for s in trimmed_samples]
-            ax2.plot(t, v, 'b-')
+            ecg_t = [s.timestamp_seconds - ecg_t0 for s in trimmed_samples]
+            ecg_v = [s.analog_value for s in trimmed_samples]
+
+        ax2 = plt.subplot(3, 1, 2)
+        if ecg_t:
+            ax2.plot(ecg_t, ecg_v, '-', color='red')
+            ax2.set_ylabel('ECG')
             ax2.set_title('Trimmed ECG')
-            ax2.set_xlabel('Time (s)')
-            ax2.grid(True, alpha=0.3)
+        ax2.set_xlabel('Time (s)')
+        ax2.grid(True, alpha=0.3)
+
+        ax3 = plt.subplot(3, 1, 3)
+        if self.arterial_velocity is not None and len(self.arterial_velocity) > 0:
+            vel_t = (
+                np.linspace(0, duration_sec, len(self.arterial_velocity))
+                if duration_sec and duration_sec > 0
+                else np.arange(len(self.arterial_velocity), dtype=float)
+            )
+            ax3.plot(vel_t, self.arterial_velocity, '-', label='Arterial velocity')
+            ax3.set_ylabel('Arterial velocity')
+        ax3.set_xlabel('Time (s)')
+        ax3.grid(True, alpha=0.3)
+
+        if ecg_t:
+            ax3r = ax3.twinx()
+            ax3r.plot(ecg_t, ecg_v, '-', label='ECG', alpha=0.9, color='red')
+            ax3r.set_ylabel('ECG')
+
+            h1, l1 = ax3.get_legend_handles_labels()
+            h2, l2 = ax3r.get_legend_handles_labels()
+            if h1 or h2:
+                ax3.legend(h1 + h2, l1 + l2, loc='upper right')
+
+        ax3.set_title('Arterial Velocity combined with ECG')
+
+        plt.tight_layout()
+
+        out_png = None
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
+            out_png = os.path.join(save_dir, 'combined_plots.png')
+            plt.savefig(out_png, dpi=150, bbox_inches='tight')
 
         if show:
-            plt.tight_layout()
             plt.show()
+        else:
+            plt.close()
+
+        return out_png
+
 
 
 def _demo_cli():
@@ -181,7 +294,7 @@ def _demo_cli():
     p = argparse.ArgumentParser(description='Simple EKG/Holo sync demo')
     p.add_argument('--h5', required=True, help='Path to holo HDF5 file')
     p.add_argument('--ecg', required=True, help='Path to ECG CSV file')
-    p.add_argument('--out', help='Path to write trimmed CSV (optional)')
+    p.add_argument('--out', help='Path to write trimmed CSV')
     args = p.parse_args()
 
     s = EKGSync()
@@ -197,3 +310,5 @@ def _demo_cli():
 
 if __name__ == '__main__':
     _demo_cli()
+
+
