@@ -19,6 +19,7 @@ def start_ecg_scan(board, analog_pin='a:0:i', target_hz=200, data_callback=None,
     try:
         it = pyfirmata2.util.Iterator(board)
         it.start()
+        #board.set_sampling_interval(4)
         if analog_input is not None:
             analogInput = analog_input
         else:

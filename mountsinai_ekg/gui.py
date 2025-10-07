@@ -5,7 +5,7 @@ import time
 import csv
 import os
 
-from .scanner import connect_to_arduino, start_ecg_scan, stop_ecg_scan
+from .scannerNew import connect_to_arduino, start_ecg_scan, stop_ecg_scan
 
 
 class MountSinaiEKGApp(tk.Tk):
@@ -24,7 +24,6 @@ class MountSinaiEKGApp(tk.Tk):
         self._live_plot_updating = False
         self.scan_thread = None
         self._scan_session_id = 0  
-        # If True, automatically save CSV when a scan finishes
         self.autosave_on_stop = True
 
         top_frame = tk.Frame(self, bg="#2e2e2e")

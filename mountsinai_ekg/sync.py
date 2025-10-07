@@ -225,7 +225,7 @@ class EKGSync:
                 if duration_sec and duration_sec > 0
                 else np.arange(len(self.arterial_velocity), dtype=float)
             )
-            ax1.plot(vel_t, self.arterial_velocity, '-')
+            ax1.plot(vel_t, self.arterial_velocity, '-', color="red")
             ax1.set_ylabel('Arterial velocity')
             ax1.set_title('Arterial Velocity (HDF5)')
         ax1.set_xlabel('Time (s)')
@@ -241,7 +241,7 @@ class EKGSync:
 
         ax2 = plt.subplot(3, 1, 2)
         if ecg_t:
-            ax2.plot(ecg_t, ecg_v, '-', color='red')
+            ax2.plot(ecg_t, ecg_v, '-', color='green')
             ax2.set_ylabel('ECG')
             ax2.set_title('Trimmed ECG')
         ax2.set_xlabel('Time (s)')
@@ -254,14 +254,14 @@ class EKGSync:
                 if duration_sec and duration_sec > 0
                 else np.arange(len(self.arterial_velocity), dtype=float)
             )
-            ax3.plot(vel_t, self.arterial_velocity, '-', label='Arterial velocity')
+            ax3.plot(vel_t, self.arterial_velocity, '-', label='Arterial velocity', color="red")
             ax3.set_ylabel('Arterial velocity')
         ax3.set_xlabel('Time (s)')
         ax3.grid(True, alpha=0.3)
 
         if ecg_t:
             ax3r = ax3.twinx()
-            ax3r.plot(ecg_t, ecg_v, '-', label='ECG', alpha=0.9, color='red')
+            ax3r.plot(ecg_t, ecg_v, '-', label='ECG', alpha=0.9, color='green')
             ax3r.set_ylabel('ECG')
 
             h1, l1 = ax3.get_legend_handles_labels()
