@@ -4,7 +4,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-from sync import EKGSync
+from .sync import EKGSync
 
 
 class SyncGUI(tk.Tk):
@@ -56,7 +56,7 @@ class SyncGUI(tk.Tk):
                 self.h5_display_var.set(os.path.basename(self.h5_paths[0]))
                 self.status_var.set(f'Loaded H5 path: {os.path.basename(self.h5_paths[0])}')
             else:
-                # show a compact summary in the entry
+ 
                 first = os.path.basename(self.h5_paths[0])
                 self.h5_display_var.set(f'{first} + {len(self.h5_paths)-1} more')
                 self.status_var.set(f'Selected {len(self.h5_paths)} HDF5 files')
@@ -104,10 +104,14 @@ class SyncGUI(tk.Tk):
                 self.update_idletasks()
                 trimmed, info = self.sync.trim_ecg_to_holo()
 
-                csv_path = os.path.join(out_dir, f'trimmedEKG_{ecg_stem}__{h5_stem}.csv')
-                info_json_path = os.path.join(out_dir, f'trimmed_{ecg_stem}__{h5_stem}_info.json')
-                arterial_json_path = os.path.join(out_dir, f'arterial_{ecg_stem}__{h5_stem}.json')
-                plots_dir = os.path.join(out_dir, f'trimmed_{ecg_stem}__{h5_stem}_plots')
+
+                run_dir = os.path.join(out_dir, f'trimmed_{ecg_stem}__{h5_stem}')
+                os.makedirs(run_dir, exist_ok=True)
+
+
+                csv_path = os.path.join(run_dir, 'trimmed_ekg.csv')
+                info_json_path = os.path.join(run_dir, 'trim_info.json')
+                arterial_json_path = os.path.join(run_dir, 'arterial_flow.json')
 
                 self.status_var.set(f'[{i}/{len(self.h5_paths)}] Saving trimmed CSV...')
                 self.update_idletasks()
@@ -122,15 +126,21 @@ class SyncGUI(tk.Tk):
                 try:
                     self.sync.save_arterial_json(arterial_json_path)
                 except Exception:
-                    pass 
+                    pass
 
                 self.status_var.set(f'[{i}/{len(self.h5_paths)}] Rendering and saving plots...')
                 self.update_idletasks()
-                png_path = self.sync.plot_combined(trimmed, show=False, save_dir=plots_dir)
+                png_path = self.sync.plot_combined(trimmed, show=False, save_dir=run_dir)
 
-                line = f"- {os.path.basename(h5_path)}\n    CSV: {csv_path}\n    Info: {info_json_path}"
+                line = (
+                    f"- {os.path.basename(h5_path)}\n"
+                    f"    Folder: {run_dir}\n"
+                    f"    CSV: {csv_path}\n"
+                    f"    Trim Info: {info_json_path}\n"
+                    f"    Arterial Flow: {arterial_json_path}"
+                )
                 if png_path:
-                    line += f"\n    Plots: {png_path}"
+                    line += f"\n    Plot: {png_path}"
                 saved_lines.append(line)
 
             self.status_var.set('Done')
@@ -139,6 +149,7 @@ class SyncGUI(tk.Tk):
         except Exception as e:
             messagebox.showerror('Error', f'Processing failed: {e}')
             self.status_var.set(f'Error: {e}')
+
 
 
 def main():
