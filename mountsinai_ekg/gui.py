@@ -5,7 +5,7 @@ import time
 import csv
 import os
 
-from .scannerNew import connect_to_arduino, start_ecg_scan, stop_ecg_scan
+from .scanner import connect_to_arduino, start_ecg_scan, stop_ecg_scan
 
 
 class MountSinaiEKGApp(tk.Tk):
@@ -64,7 +64,7 @@ class MountSinaiEKGApp(tk.Tk):
         self.runtime_label = tk.Label(self, textvariable=self.runtime_var, bg="#2e2e2e", fg="white")
         self.runtime_label.pack(side=tk.TOP, anchor="w", padx=10)
 
-        self.hz_var = tk.StringVar(value="200")
+        self.hz_var = tk.StringVar(value="1000")
         self.hz_label = tk.Label(top_frame, text="Hz:", bg="#2e2e2e", fg="white")
         self.hz_label.pack(side=tk.LEFT, padx=(10, 0))
         self.hz_entry = tk.Entry(top_frame, textvariable=self.hz_var, width=6)
@@ -311,9 +311,9 @@ class MountSinaiEKGApp(tk.Tk):
             try:
                 hz = float(self.hz_var.get())
                 if hz <= 0:
-                    hz = 200.0
+                    hz = 1000.0
             except Exception:
-                hz = 200.0
+                hz = 1000.0
 
             y = []
             x = []

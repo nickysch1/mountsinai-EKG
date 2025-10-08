@@ -4,7 +4,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-from .sync import EKGSync
+from sync import EKGSync
 
 
 class SyncGUI(tk.Tk):
@@ -16,26 +16,23 @@ class SyncGUI(tk.Tk):
         self.configure(bg="#2e2e2e")
 
         self.ecg_path_var = tk.StringVar(value='')
-        # store multiple H5 paths; mirror a short label in the entry
         self.h5_display_var = tk.StringVar(value='')
         self.h5_paths: list[str] = []
         self.out_dir_var = tk.StringVar(value='')
 
-        # --- Rows ---
-        tk.Label(self, text='ECG CSV:', bg="#2e2e2e").grid(row=0, column=0, sticky='w', padx=8, pady=8)
+        tk.Label(self, text='ECG CSV:', bg="#ffffff").grid(row=0, column=0, sticky='w', padx=8, pady=8)
         tk.Entry(self, textvariable=self.ecg_path_var, width=60).grid(row=0, column=1, padx=4)
-        tk.Button(self, text='Browse...', command=self.browse_ecg, bg="#2e2e2e").grid(row=0, column=2, padx=4)
+        tk.Button(self, text='Browse...', command=self.browse_ecg, bg="#5d5d5d").grid(row=0, column=2, padx=4)
 
-        tk.Label(self, text='Holo HDF5(s):', bg="#2e2e2e").grid(row=1, column=0, sticky='w', padx=8, pady=8)
+        tk.Label(self, text='Holo HDF5(s):', bg="#FFFFFF").grid(row=1, column=0, sticky='w', padx=8, pady=8)
         tk.Entry(self, textvariable=self.h5_display_var, width=60).grid(row=1, column=1, padx=4)
-        tk.Button(self, text='Browse...', command=self.browse_h5_multi, bg="#2e2e2e").grid(row=1, column=2, padx=4)
+        tk.Button(self, text='Browse...', command=self.browse_h5_multi, bg="#5d5d5d").grid(row=1, column=2, padx=4)
 
-        tk.Label(self, text='Output Folder:', bg="#2e2e2e").grid(row=2, column=0, sticky='w', padx=8, pady=8)
+        tk.Label(self, text='Output Folder:', bg="#ffffff").grid(row=2, column=0, sticky='w', padx=8, pady=8)
         tk.Entry(self, textvariable=self.out_dir_var, width=60).grid(row=2, column=1, padx=4)
-        tk.Button(self, text='Browse...', command=self.browse_outdir, bg="#2e2e2e").grid(row=2, column=2, padx=4)
+        tk.Button(self, text='Browse...', command=self.browse_outdir, bg="#5d5d5d").grid(row=2, column=2, padx=4)
 
-        # Batch process button
-        tk.Button(self, text='Process, Trim, and Plot (Batch)', command=self.process_batch, bg="#2e2e2e").grid(row=3, column=1, pady=12)
+        tk.Button(self, text='Process, Trim, and Plot (Batch)', command=self.process_batch, bg="#5d5d5d").grid(row=3, column=1, pady=12)
 
         self.status_var = tk.StringVar(value='Ready')
         tk.Label(self, textvariable=self.status_var, bg="#2e2e2e").grid(row=4, column=0, columnspan=3, sticky='w', padx=8)
@@ -87,7 +84,6 @@ class SyncGUI(tk.Tk):
         try:
             self.status_var.set('Loading ECG CSV...')
             self.update_idletasks()
-            # Load ECG once; reuse for all H5s
             self.sync.load_ecg_csv(ecg_path)
 
             ecg_stem = os.path.splitext(os.path.basename(ecg_path))[0]
@@ -108,7 +104,6 @@ class SyncGUI(tk.Tk):
                 self.update_idletasks()
                 trimmed, info = self.sync.trim_ecg_to_holo()
 
-                # Add H5 stem so each output is distinct
                 csv_path = os.path.join(out_dir, f'trimmedEKG_{ecg_stem}__{h5_stem}.csv')
                 info_json_path = os.path.join(out_dir, f'trimmed_{ecg_stem}__{h5_stem}_info.json')
                 arterial_json_path = os.path.join(out_dir, f'arterial_{ecg_stem}__{h5_stem}.json')
@@ -124,11 +119,10 @@ class SyncGUI(tk.Tk):
 
                 self.status_var.set(f'[{i}/{len(self.h5_paths)}] Saving arterial flow JSON...')
                 self.update_idletasks()
-                # safe even if arterial not present; method raises if missing
                 try:
                     self.sync.save_arterial_json(arterial_json_path)
                 except Exception:
-                    pass  # arterial signal may be absent; continue
+                    pass 
 
                 self.status_var.set(f'[{i}/{len(self.h5_paths)}] Rendering and saving plots...')
                 self.update_idletasks()

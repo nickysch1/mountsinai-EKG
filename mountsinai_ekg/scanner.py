@@ -1,73 +1,103 @@
+
+from __future__ import annotations
+
 import threading
 import time
-import datetime
-import struct
-import os
-import json
-from typing import Dict, Any
-import h5py
-import matplotlib.pyplot as plt
-import numpy as np 
-import csv
+from typing import Any, Dict, Optional
+
+import pyfirmata2
 
 _ecg_scan_stop_flag = threading.Event()
 
-def start_ecg_scan(board, analog_pin='a:0:i', target_hz=200, data_callback=None, analog_input=None):
-    import time
-    ECG_data = []
+
+def _parse_analog_index(analog_pin: str) -> int:
+    s = analog_pin.strip().lower()
+    if s.startswith("a:"):
+     
+        try:
+            return int(s.split(":")[1])
+        except Exception:
+            pass
+    if s.startswith("a"):
+        
+        try:
+            return int(s[1:])
+        except Exception:
+            pass
+   
+    return int(s)
+
+
+def start_ecg_scan(
+    board: "pyfirmata2.Arduino",
+    analog_pin: str = "a:0:i",
+    target_hz: int = 200,
+    data_callback=None,
+    analog_input: Optional[Any] = None,
+):
+
+    ECG_data: list[Dict[str, Any]] = []
     _ecg_scan_stop_flag.clear()
+
+    sampling_interval_ms = max(1, int(1000 / max(1, int(target_hz))))
+
+    if analog_input is not None:
+        a_pin = analog_input
+    else:
+        idx = _parse_analog_index(analog_pin)
+        a_pin = board.analog[idx]
+    board.samplingOn(sampling_interval_ms)
+
+    sample_counter = 0
+
+    def _on_sample(value: float):
+        nonlocal sample_counter
+        sample_counter += 1
+        ts_ns = time.time_ns()
+        sample = {
+            "sample_num": sample_counter,
+            "analog_value": value,  
+            "timestamp_ns": ts_ns,
+            "timestamp_seconds": ts_ns / 1_000_000_000,
+        }
+        ECG_data.append(sample)
+        if data_callback:
+            try:
+                data_callback(sample)
+            except Exception as _:
+                pass
+
+    a_pin.register_callback(_on_sample)
+    a_pin.enable_reporting()
+
     try:
-        it = pyfirmata2.util.Iterator(board)
-        it.start()
-        #board.set_sampling_interval(4)
-        if analog_input is not None:
-            analogInput = analog_input
-        else:
-            analogInput = board.get_pin(analog_pin)
-        test = 0
-        target_interval = 1.0 / target_hz
-        perf_start_ns = time.perf_counter_ns()
-        target_interval_ns = int(target_interval * 1_000_000_000)
-        next_sample_time_ns = perf_start_ns
-        print("Sample#, Analog Value, Timestamp (ns)")
         while not _ecg_scan_stop_flag.is_set():
-            current_perf_ns = time.perf_counter_ns()
-            if current_perf_ns >= next_sample_time_ns:
-                test += 1
-                analog_value = analogInput.value
-                timestamp_ns = time.time_ns()
-                current_time = timestamp_ns / 1_000_000_000
-                sample = {
-                    'sample_num': test,
-                    'analog_value': analog_value,
-                    'timestamp_ns': timestamp_ns,
-                    'timestamp_seconds': current_time
-                }
-                ECG_data.append(sample)
-                if data_callback:
-                    data_callback(sample)
-                print(f"{test}, {analog_value}, {timestamp_ns}")
-                next_sample_time_ns += target_interval_ns
-        print(f"Scan stopped. Total samples: {test}")
-        return ECG_data
-    except Exception as e:
-        print(f"Error during ECG collection: {e}")
-        return []
+            time.sleep(0.01) 
+    finally:
+
+        try:
+            a_pin.disable_reporting()
+        except Exception:
+            pass
+        try:
+            board.samplingOff()
+        except Exception:
+            pass
+
+    return ECG_data
+
 
 def stop_ecg_scan():
+
     _ecg_scan_stop_flag.set()
-import pyfirmata2
+
 
 def connect_to_arduino(port: str | None = None):
     try:
-        if port is None:
+        if port is None or (isinstance(port, str) and port.strip().lower() == "auto"):
             port_to_use = pyfirmata2.Arduino.AUTODETECT
         else:
-            p = str(port).strip()
-            if not p or p.lower() == "auto":
-                port_to_use = pyfirmata2.Arduino.AUTODETECT
-            else:
-                port_to_use = p
+            port_to_use = str(port).strip()
         board = pyfirmata2.Arduino(port_to_use)
         print(f"Connected to Arduino on {port_to_use}!")
         return board
