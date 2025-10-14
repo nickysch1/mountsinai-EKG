@@ -51,6 +51,60 @@ class EKGSync:
 
         self.h5_path = path
 
+    @staticmethod
+    def _parse_time_to_seconds(txt):
+        return int(txt.strip()) * 1e-6
+
+
+    def trim_ecg_by_seconds(
+        self,
+        start_time_s: float,
+        end_time_s: float,
+        *,
+        relative_to_ecg_start: bool = True
+    ):
+
+        if not self.ecg_samples:
+            raise RuntimeError("ECG samples not loaded")
+
+        if start_time_s > end_time_s:
+            start_time_s, end_time_s = end_time_s, start_time_s
+
+        t0 = self.ecg_samples[0].timestamp_seconds
+        if relative_to_ecg_start:
+            start_abs_s = t0 + start_time_s
+            end_abs_s   = t0 + end_time_s
+        else:
+            start_abs_s = start_time_s
+            end_abs_s   = end_time_s
+
+        start_ns = int(start_abs_s * 1_000_000_000)
+        end_ns   = int(end_abs_s   * 1_000_000_000)
+
+        s_idx = self.find_nearest_sample_index(start_ns)
+        e_idx = self.find_nearest_sample_index(end_ns)
+        if s_idx is None or e_idx is None:
+            raise RuntimeError("Could not locate indices for manual trim")
+        if s_idx > e_idx:
+            s_idx, e_idx = e_idx, s_idx
+
+        trimmed = self.ecg_samples[s_idx:e_idx + 1]
+
+        info = {
+            "mode": "manual_seconds",
+            "relative_to_ecg_start": relative_to_ecg_start,
+            "input_start_s": start_time_s,
+            "input_end_s": end_time_s,
+            "resolved_start_abs_s": start_abs_s,
+            "resolved_end_abs_s": end_abs_s,
+            "start_idx": s_idx,
+            "end_idx": e_idx,
+            "start_sample": trimmed[0] if trimmed else None,
+            "end_sample": trimmed[-1] if trimmed else None,
+        }
+        return trimmed, info
+
+
     def load_ecg_csv(self, path: str, timestamp_ns_field: str = 'timestamp_ns') -> None:
         if not os.path.exists(path):
             raise FileNotFoundError(path)
