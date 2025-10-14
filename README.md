@@ -16,3 +16,5 @@ mountsinai-ekg
 # or Windows GUI entry (no console window)
 MountSinai-EKG
 ```
+# Moutn Sinai EKG-Sync
+A Tkinter desktop application to synchronize ekg readings with arterial flow data collected from holo doppler scanning
