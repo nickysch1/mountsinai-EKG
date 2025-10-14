@@ -4,7 +4,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-from sync import EKGSync
+from .sync import EKGSync
 
 
 class SyncGUI(tk.Tk):
