@@ -31,25 +31,109 @@ class EKGSync:
 
         self.ecg_samples: List[ECGSample] = []
 
-    def load_h5(self, path: str) -> None:
+class EKGSync:
+    def __init__(self) -> None:
+        self.h5_path: Optional[str] = None
+        self.holo_unix_first: Optional[float] = None
+        self.holo_unix_last: Optional[float] = None
+        self.arterial_velocity: Optional[np.ndarray] = None
+
+        self.ecg_samples: List[ECGSample] = []
+
+    def load_h5(self, path: str, *, load_timestamps: bool = True) -> None:
+        """
+        Load HDF5. If load_timestamps=False, we skip ALL attempts to read
+        UnixTimestampFirst/Last so manual mode never breaks on timestamp layout.
+        Arterial velocity is still loaded if present.
+        """
         if not os.path.exists(path):
             raise FileNotFoundError(path)
 
-        with h5py.File(path, 'r') as h5f:
-            try:
-                unix_first_arr = h5f['/UnixTimestampFirst'][:]
-                unix_last_arr = h5f['/UnixTimestampLast'][:]
-                self.holo_unix_first = float(unix_first_arr[0]) if len(unix_first_arr) > 0 else float(unix_first_arr)
-                self.holo_unix_last = float(unix_last_arr[0]) if len(unix_last_arr) > 0 else float(unix_last_arr)
-            except Exception as e:
-                raise RuntimeError(f"Failed to read UnixTimestampFirst/Last: {e}")
+        # Reset per-file fields
+        self.h5_path = path
+        self.holo_unix_first = None
+        self.holo_unix_last = None
+        self.arterial_velocity = None
 
+        with h5py.File(path, "r") as h5f:
+            # ---- Read UnixTimestampFirst / UnixTimestampLast (optional) ----
+            if load_timestamps:
+                try:
+                    def _read_timestamp_from(obj, label: str) -> float:
+                        # obj can be a dataset or a group containing datasets
+                        if isinstance(obj, h5py.Dataset):
+                            arr = obj[...]
+                        else:
+                            ds = None
+                            for name, child in obj.items():
+                                if isinstance(child, h5py.Dataset):
+                                    ds = child
+                                    break
+                            if ds is None:
+                                raise KeyError(f"No datasets found under {label}")
+                            arr = ds[...]
+
+                        arr = np.array(arr)
+                        if arr.size == 0:
+                            raise ValueError(f"{label} dataset is empty")
+                        if arr.ndim == 0:
+                            return float(arr)
+                        return float(arr.flat[0])
+
+                    # New layout: /Figures/UnixTimestampFirst and /Figures/UnixTimestampLast
+                    if "Figures" in h5f:
+                        figures_grp = h5f["Figures"]
+
+                        if "UnixTimestampFirst" not in figures_grp or "UnixTimestampLast" not in figures_grp:
+                            raise KeyError("Figures group exists but missing UnixTimestampFirst/Last subgroups")
+
+                        utf_obj = figures_grp["UnixTimestampFirst"]
+                        utl_obj = figures_grp["UnixTimestampLast"]
+
+                        self.holo_unix_first = _read_timestamp_from(utf_obj, "UnixTimestampFirst")
+                        self.holo_unix_last  = _read_timestamp_from(utl_obj, "UnixTimestampLast")
+
+                    else:
+                        # Old layout: datasets at root
+                        unix_first_arr = np.array(h5f["/UnixTimestampFirst"][...])
+                        unix_last_arr  = np.array(h5f["/UnixTimestampLast"][...])
+
+                        if unix_first_arr.ndim == 0:
+                            self.holo_unix_first = float(unix_first_arr)
+                        else:
+                            self.holo_unix_first = float(unix_first_arr.flat[0])
+
+                        if unix_last_arr.ndim == 0:
+                            self.holo_unix_last = float(unix_last_arr)
+                        else:
+                            self.holo_unix_last = float(unix_last_arr.flat[0])
+
+                except Exception as e:
+                    # In auto mode we still want failures to surface
+                    raise RuntimeError(f"Failed to read UnixTimestampFirst/Last: {e}")
+
+            # ---- Arterial velocity: new layout + fallback to old ----
             try:
-                self.arterial_velocity = np.array(h5f['/SignalsArterialVelocity_y'][:])
+                if "Signals" in h5f:
+                    sig_grp = h5f["Signals"]
+                    if "ArterialVelocity" in sig_grp:
+                        av_grp = sig_grp["ArterialVelocity"]
+                        if "ArterialVelocity_y" in av_grp:
+                            self.arterial_velocity = np.array(av_grp["ArterialVelocity_y"][...])
+                        else:
+                            raise KeyError("ArterialVelocity_y not found in /Signals/ArterialVelocity")
+                    else:
+                        # Fall back to old root dataset
+                        self.arterial_velocity = np.array(h5f["/SignalsArterialVelocity_y"][...])
+                else:
+                    # Old layout: dataset directly at root
+                    self.arterial_velocity = np.array(h5f["/SignalsArterialVelocity_y"][...])
             except Exception:
+                # If anything above fails, just treat as missing
                 self.arterial_velocity = None
 
-        self.h5_path = path
+
+
 
     @staticmethod
     def _parse_time_to_seconds(txt):
@@ -362,7 +446,12 @@ def _demo_cli():
     s.plot_combined(trimmed)
 
 
-if __name__ == '__main__':
-    _demo_cli()
+#if __name__ == '__main__':
+#    _demo_cli()
 
+
+s = EKGSync()
+s.load_h5("C:/Users/nicho/Downloads/251112_Holo006_L_1_HD_1_EF_1_output.h5")
+print("timestamps:", s.holo_unix_first, s.holo_unix_last)
+print("arterial shape:", None if s.arterial_velocity is None else s.arterial_velocity.shape)
 

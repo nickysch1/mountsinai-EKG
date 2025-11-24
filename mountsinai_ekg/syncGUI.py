@@ -124,7 +124,7 @@ class SyncGUI(tk.Tk):
                 h5_stem = os.path.splitext(os.path.basename(h5_path))[0]
                 self.status_var.set(f'[{i}/{len(self.h5_paths)}] Loading H5: {os.path.basename(h5_path)}')
                 self.update_idletasks()
-                self.sync.load_h5(h5_path)
+                self.sync.load_h5(h5_path, load_timestamps=not use_manual)
 
                 self.status_var.set(f'[{i}/{len(self.h5_paths)}] Trimming...')
                 self.update_idletasks()
