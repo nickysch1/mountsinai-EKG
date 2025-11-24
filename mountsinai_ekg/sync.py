@@ -426,32 +426,3 @@ class EKGSync:
 
 
 
-def _demo_cli():
-    import argparse
-
-    p = argparse.ArgumentParser(description='Simple EKG/Holo sync demo')
-    p.add_argument('--h5', required=True, help='Path to holo HDF5 file')
-    p.add_argument('--ecg', required=True, help='Path to ECG CSV file')
-    p.add_argument('--out', help='Path to write trimmed CSV')
-    args = p.parse_args()
-
-    s = EKGSync()
-    s.load_h5(args.h5)
-    s.load_ecg_csv(args.ecg)
-    trimmed, info = s.trim_ecg_to_holo()
-    print('Trim info:', info)
-    if args.out:
-        s.save_trimmed_csv(trimmed, args.out)
-        print('Wrote', args.out)
-    s.plot_combined(trimmed)
-
-
-#if __name__ == '__main__':
-#    _demo_cli()
-
-
-s = EKGSync()
-s.load_h5("C:/Users/nicho/Downloads/251112_Holo006_L_1_HD_1_EF_1_output.h5")
-print("timestamps:", s.holo_unix_first, s.holo_unix_last)
-print("arterial shape:", None if s.arterial_velocity is None else s.arterial_velocity.shape)
-

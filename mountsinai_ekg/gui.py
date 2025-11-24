@@ -5,7 +5,7 @@ import time
 import csv
 import os
 
-from scanner import connect_to_arduino, start_ecg_scan, stop_ecg_scan
+from .scanner import connect_to_arduino, start_ecg_scan, stop_ecg_scan
 
 
 class MountSinaiEKGApp(tk.Tk):
